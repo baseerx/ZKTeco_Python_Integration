@@ -1,0 +1,52 @@
+2025-06-17 16:23:20,478 - INFO - main - Connecting to device to fetch attendance...
+2025-06-17 16:23:21,247 - INFO - main - Attendance records fetched successfully
+2025-06-17 16:23:21,315 - INFO - main - Disconnected from device
+2025-06-17 16:27:33,773 - INFO - main - Connecting to device to fetch attendance...
+2025-06-17 16:27:35,067 - INFO - main - Attendance records stored in database successfully
+2025-06-17 16:27:35,068 - INFO - main - Attendance records fetched successfully
+2025-06-17 16:27:35,156 - INFO - main - Disconnected from device
+2025-06-17 16:30:41,611 - INFO - main - Connecting to device to fetch attendance...
+2025-06-17 16:30:42,448 - ERROR - main - Error while storing attendance in database
+Traceback (most recent call last):
+  File "D:\NPCC\BiometricAttendence\main.py", line 115, in store_in_db
+    "user_id": record["user_id"],
+               ~~~~~~^^^^^^^^^^^
+TypeError: 'Attendance' object is not subscriptable
+2025-06-17 16:30:42,451 - INFO - main - Attendance records fetched successfully
+2025-06-17 16:30:42,511 - INFO - main - Disconnected from device
+2025-06-17 16:30:55,567 - INFO - main - Connecting to device to fetch attendance...
+2025-06-17 16:30:56,371 - ERROR - main - Error while storing attendance in database
+Traceback (most recent call last):
+  File "D:\NPCC\BiometricAttendence\main.py", line 115, in store_in_db
+    "user_id": record["user_id"],
+               ~~~~~~^^^^^^^^^^^
+TypeError: 'Attendance' object is not subscriptable
+2025-06-17 16:30:56,373 - INFO - main - Attendance records fetched successfully
+2025-06-17 16:30:56,445 - INFO - main - Disconnected from device
+2025-06-17 16:31:32,975 - INFO - main - Connecting to device to fetch attendance...
+2025-06-17 16:31:33,901 - ERROR - main - Error while storing attendance in database
+Traceback (most recent call last):
+  File "D:\NPCC\BiometricAttendence\main.py", line 115, in store_in_db
+    "user_id": record["user_id"],
+               ~~~~~~^^^^^^^^^^^
+TypeError: 'Attendance' object is not subscriptable
+2025-06-17 16:31:33,903 - INFO - main - Attendance records fetched successfully
+2025-06-17 16:31:33,960 - INFO - main - Disconnected from device
+2025-06-17 16:31:37,308 - INFO - main - Connecting to device to fetch attendance...
+2025-06-17 16:31:38,276 - ERROR - main - Error while storing attendance in database
+Traceback (most recent call last):
+  File "D:\NPCC\BiometricAttendence\main.py", line 115, in store_in_db
+    "user_id": record["user_id"],
+               ~~~~~~^^^^^^^^^^^
+TypeError: 'Attendance' object is not subscriptable
+2025-06-17 16:31:38,277 - INFO - main - Attendance records fetched successfully
+2025-06-17 16:31:38,341 - INFO - main - Disconnected from device
+2025-06-17 16:31:51,501 - INFO - main - Connecting to device to fetch attendance...
+2025-06-17 16:31:52,332 - ERROR - main - Error while storing attendance in database
+Traceback (most recent call last):
+  File "D:\NPCC\BiometricAttendence\main.py", line 115, in store_in_db
+    "user_id": record["user_id"],
+               ~~~~~~^^^^^^^^^^^
+TypeError: 'Attendance' object is not subscriptable
+2025-06-17 16:31:52,333 - INFO - main - Attendance records fetched successfully
+2025-06-17 16:31:52,402 - INFO - main - Disconnected from device
