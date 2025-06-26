@@ -8,10 +8,12 @@ from database import Base
 from sqlalchemy import column, Integer, String,text
 from database import SessionLocal
 from sqlalchemy.orm import Session
+from datetime import datetime
 
 # --- Load Environment Variables ---
 load_dotenv()
 ip = os.getenv("BIOMETRIC_IP_1")
+ip_2 = os.getenv("BIOMETRIC_IP_2")
 port = os.getenv("BIOMETRIC_PORT")
 
 # --- Logging Configuration ---
@@ -81,7 +83,24 @@ print(conn.get_serialnumber())
 def get_employees_attendance():
     conn = None
     try:
-        logger.info("Connecting to device to fetch attendance...")
+        # logger.info("Connecting to device to fetch attendance...")
+        first_machine=call_biometric_machines(ip, port)
+        second_machine=call_biometric_machines(ip_2, port)
+        return {"first_machine_attendance": first_machine["attendance"], "second_machine_attendance": second_machine["attendance"]}
+    except Exception as e:
+        logger.error("Error while fetching attendance", exc_info=True)
+        return {"error": str(e)}
+    finally:
+        if conn:
+            conn.enable_device()
+            conn.disconnect()
+            logger.info("Disconnected from device")
+
+@staticmethod
+def call_biometric_machines(ip,port):
+    conn = None
+    try:
+        # logger.info("Connecting to device to fetch attendance...")
         zk = ZK(ip, port=int(port), timeout=5)
         conn = zk.connect()
         conn.disable_device()
@@ -105,30 +124,55 @@ def store_in_db(attendance):
     db: Session = SessionLocal()
     try:
         for record in attendance:
-            # Check if the record already exists based on user_id, timestamp, and punch
+            new_record = vars(record)
+            timestamp_dt = new_record["timestamp"]
+            if isinstance(timestamp_dt, str):
+                timestamp_dt = datetime.strptime(
+                    timestamp_dt, "%Y-%m-%d %H:%M:%S")
+
+            # Check if a record already exists for this user and *exact timestamp*
             check_sql = text("""
                 SELECT 1 FROM attendance 
-                WHERE user_id = :user_id AND timestamp = :timestamp AND punch = :punch
+                WHERE user_id = :user_id AND timestamp = :timestamp
                 LIMIT 1
             """)
             result = db.execute(check_sql, {
-                "user_id": record["user_id"],
-                "timestamp": record["timestamp"],
-                "punch": record["punch"]
+                "user_id": new_record["user_id"],
+                "timestamp": timestamp_dt,
             }).first()
 
-            if not result:
-                insert_sql = text("""
-                    INSERT INTO attendance (uid, user_id, timestamp, status, punch)
-                    VALUES (:uid, :user_id, :timestamp, :status, :punch)
-                """)
-                db.execute(insert_sql, {
-                    "uid": record["uid"],
-                    "user_id": record["user_id"],
-                    "timestamp": record["timestamp"],
-                    "status": record["status"],
-                    "punch": record["punch"]
-                })
+            # If exact timestamp exists, skip to next
+            if result:
+                logger.info(
+                    f"Duplicate entry skipped for user {new_record['user_id']} at {timestamp_dt}")
+                continue
+
+            # Determine status based on existing entries today
+            check_today_sql = text("""
+                SELECT COUNT(*) as count FROM attendance
+                WHERE user_id = :user_id AND DATE(timestamp) = :date_only
+            """)
+            date_only = timestamp_dt.date().isoformat()
+            result = db.execute(check_today_sql, {
+                "user_id": new_record["user_id"],
+                "date_only": date_only,
+            }).first()
+            count_today = result[0] if result else 0
+
+            status = 'Checked In' if count_today == 0 else 'Checked Out'
+
+            # Insert the new record
+            insert_sql = text("""
+                INSERT INTO attendance (uid, user_id, timestamp, status, punch)
+                VALUES (:uid, :user_id, :timestamp, :status, :punch)
+            """)
+            db.execute(insert_sql, {
+                "uid": new_record["uid"],
+                "user_id": new_record["user_id"],
+                "timestamp": timestamp_dt,
+                "status": status,
+                "punch": new_record["punch"]
+            })
 
         db.commit()
         logger.info("Attendance records stored in database successfully")
