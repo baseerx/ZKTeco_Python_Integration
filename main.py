@@ -79,6 +79,36 @@ print(conn.get_serialnumber())
 
     """
 
+
+@app.get("/clear_old_attendance")
+def clear_old_attendance():
+    try:
+        zk1 = ZK(ip, port=int(port), timeout=5)
+        zk2 = ZK(ip_2, port=int(port), timeout=5)
+        conn1 = zk1.connect()
+        conn2 = zk2.connect()
+        conn1.disable_device()
+        conn2.disable_device()
+
+        # Optional: Add logic to verify data is already backed up
+        # If verified, then clear all attendance
+        conn1.clear_attendance()
+        conn2.clear_attendance()
+
+        logger.info("Cleared all attendance records from device.")
+        return {"message": "Attendance records cleared from both devices."}
+    except Exception as e:
+        logger.error("Error clearing attendance from device", exc_info=True)
+        return {"error": str(e)}
+    finally:
+        if conn1:
+            conn1.enable_device()
+            conn1.disconnect()
+        if conn2:
+            conn2.enable_device()
+            conn2.disconnect()
+        logger.info("Disconnected from devices")
+
 @app.get("/get_attendance")
 def get_employees_attendance():
     conn = None
@@ -129,13 +159,14 @@ def store_in_db(attendance):
             if isinstance(timestamp_dt, str):
                 timestamp_dt = datetime.strptime(
                     timestamp_dt, "%Y-%m-%d %H:%M:%S")
-
+            
+  
             # Check if a record already exists for this user and *exact timestamp*
             check_sql = text("""
-                SELECT 1 FROM attendance 
+                SELECT TOP 1 1 FROM attendance 
                 WHERE user_id = :user_id AND timestamp = :timestamp
-                LIMIT 1
             """)
+           
             result = db.execute(check_sql, {
                 "user_id": new_record["user_id"],
                 "timestamp": timestamp_dt,
@@ -150,7 +181,7 @@ def store_in_db(attendance):
             # Determine status based on existing entries today
             check_today_sql = text("""
                 SELECT COUNT(*) as count FROM attendance
-                WHERE user_id = :user_id AND DATE(timestamp) = :date_only
+                WHERE user_id = :user_id AND CAST(timestamp AS DATE) = :date_only
             """)
             date_only = timestamp_dt.date().isoformat()
             result = db.execute(check_today_sql, {
@@ -159,19 +190,27 @@ def store_in_db(attendance):
             }).first()
             count_today = result[0] if result else 0
 
-            status = 'Checked In' if count_today == 0 else 'Checked Out'
+            # Compare with 16:30 for early checkout
+            check_out_time = datetime.combine(timestamp_dt.date(), datetime.strptime("16:30", "%H:%M").time())
+            if count_today == 0:
+                status = 'Checked In'
+            elif timestamp_dt < check_out_time:
+                status = 'Early Checked Out'
+            else:
+                status = 'Checked Out'
 
             # Insert the new record
             insert_sql = text("""
-                INSERT INTO attendance (uid, user_id, timestamp, status, punch)
-                VALUES (:uid, :user_id, :timestamp, :status, :punch)
+                INSERT INTO attendance (uid, user_id, timestamp, status, punch, lateintime)
+                VALUES (:uid, :user_id, :timestamp, :status, :punch, :lateintime)
             """)
             db.execute(insert_sql, {
                 "uid": new_record["uid"],
                 "user_id": new_record["user_id"],
                 "timestamp": timestamp_dt,
                 "status": status,
-                "punch": new_record["punch"]
+                "punch": new_record["punch"],
+                "lateintime": 'late' if result[0]==0 and timestamp_dt.hour >= 9 else 'on time'
             })
 
         db.commit()

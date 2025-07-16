@@ -1,19 +1,23 @@
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, declarative_base
+from urllib.parse import quote_plus
 
-# Replace with your own credentials
-DB_USER = "root"
-DB_PASSWORD = ""
-DB_HOST = "localhost"
-DB_PORT = "3306"
-DB_NAME = "attendance_system"
+# Safely encode password that contains special characters like @
+username = "sa"
+password = quote_plus("Sa@157")  # encodes '@' as '%40'
+host = "192.168.157.51"
+port = "9090"
+database = "Attendance_System"
+driver = "ODBC+Driver+17+for+SQL+Server"
 
-SQLALCHEMY_DATABASE_URL = (
-    f"mysql+pymysql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
+# Build the SQLAlchemy connection URL
+DATABASE_URL = (
+    f"mssql+pyodbc://{username}:{password}@{host}:{port}/{database}"
+    f"?driver={driver}&TrustServerCertificate=yes&charset=utf8mb4"
 )
 
-engine = create_engine(SQLALCHEMY_DATABASE_URL)
-
+# Create engine and session
+engine = create_engine(DATABASE_URL)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 Base = declarative_base()
