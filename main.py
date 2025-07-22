@@ -149,7 +149,6 @@ def call_biometric_machines(ip,port):
 
 # Dependency to get DB session
 
-
 def store_in_db(attendance):
     db: Session = SessionLocal()
     try:
@@ -157,30 +156,30 @@ def store_in_db(attendance):
             new_record = vars(record)
             timestamp_dt = new_record["timestamp"]
             if isinstance(timestamp_dt, str):
-                timestamp_dt = datetime.strptime(
-                    timestamp_dt, "%Y-%m-%d %H:%M:%S")
-            
-  
-            # Check if a record already exists for this user and *exact timestamp*
+                timestamp_dt = datetime.strptime(timestamp_dt, "%Y-%m-%d %H:%M:%S")
+
+            # Check for duplicate record (exact timestamp)
             check_sql = text("""
                 SELECT TOP 1 1 FROM attendance 
                 WHERE user_id = :user_id AND timestamp = :timestamp
             """)
-           
             result = db.execute(check_sql, {
                 "user_id": new_record["user_id"],
                 "timestamp": timestamp_dt,
             }).first()
 
-            # If exact timestamp exists, skip to next
             if result:
-                logger.info(
-                    f"Duplicate entry skipped for user {new_record['user_id']} at {timestamp_dt}")
+                logger.info(f"Duplicate entry skipped for user {new_record['user_id']} at {timestamp_dt}")
                 continue
 
-            # Determine status based on existing entries today
+            # Get existing records for the user on the same day
             check_today_sql = text("""
-                SELECT COUNT(*) as count FROM attendance
+                SELECT COUNT(*) as count, MIN(timestamp) as first_timestamp, 
+                       MAX(timestamp) as last_timestamp,
+                       (SELECT TOP 1 status FROM attendance 
+                        WHERE user_id = :user_id AND CAST(timestamp AS DATE) = :date_only 
+                        ORDER BY timestamp DESC) as status
+                FROM attendance
                 WHERE user_id = :user_id AND CAST(timestamp AS DATE) = :date_only
             """)
             date_only = timestamp_dt.date().isoformat()
@@ -188,16 +187,41 @@ def store_in_db(attendance):
                 "user_id": new_record["user_id"],
                 "date_only": date_only,
             }).first()
-            count_today = result[0] if result else 0
 
-            # Compare with 16:30 for early checkout
-            check_out_time = datetime.combine(timestamp_dt.date(), datetime.strptime("16:30", "%H:%M").time())
-            if count_today == 0:
-                status = 'Checked In'
-            elif timestamp_dt < check_out_time:
-                status = 'Early Checked Out'
+            count_today = result[0] if result else 0
+            first_timestamp = result[1] if result and result[1] else None
+            last_timestamp = result[2] if result and result[2] else None
+            current_status = result[3] if result and result[3] else None
+
+            # Define time thresholds
+            check_out_time = datetime.combine(timestamp_dt.date(), time(16, 30))
+            check_out_after_twelve = datetime.combine(timestamp_dt.date(), time(12, 0))
+
+            # Determine status based on timestamp and existing records
+            if timestamp_dt < check_out_after_twelve:
+                if count_today == 0:
+                    status = 'Checked In'
+                else:
+                    logger.info(f"Ignoring new entry before 12 PM for user {new_record['user_id']} at {timestamp_dt}")
+                    continue
             else:
-                status = 'Checked Out'
+                if count_today == 0:
+                    status = 'Checked In'
+                else:
+                    if current_status in ['Early Checked Out', 'Checked Out'] and last_timestamp >= check_out_after_twelve:
+                        status = 'Checked Out' if timestamp_dt >= check_out_time else 'Early Checked Out'
+                        delete_sql = text("""
+                            DELETE FROM attendance
+                            WHERE user_id = :user_id AND CAST(timestamp AS DATE) = :date_only
+                            AND timestamp >= :check_out_after_twelve
+                        """)
+                        db.execute(delete_sql, {
+                            "user_id": new_record["user_id"],
+                            "date_only": date_only,
+                            "check_out_after_twelve": check_out_after_twelve,
+                        })
+                    else:
+                        status = 'Checked Out' if timestamp_dt >= check_out_time else 'Early Checked Out'
 
             # Insert the new record
             insert_sql = text("""
@@ -210,18 +234,18 @@ def store_in_db(attendance):
                 "timestamp": timestamp_dt,
                 "status": status,
                 "punch": new_record["punch"],
-                "lateintime": 'late' if result[0]==0 and timestamp_dt.hour >= 9 else 'on time'
+                "lateintime": 'late' if count_today == 0 and timestamp_dt.time() > time(9, 0) else 'on time'
             })
 
         db.commit()
         logger.info("Attendance records stored in database successfully")
     except Exception as e:
         db.rollback()
-        logger.error(
-            "Error while storing attendance in database", exc_info=True)
+        logger.error("Error while storing attendance in database", exc_info=True)
     finally:
         db.close()
-        
+
+
 def get_db():
     db = SessionLocal()
     try:
