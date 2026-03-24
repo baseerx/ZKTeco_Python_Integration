@@ -194,7 +194,7 @@ def store_in_db(attendance):
             current_status = result[3] if result and result[3] else None
 
             # Define time thresholds
-            check_out_time = datetime.combine(timestamp_dt.date(), time(16, 30))
+            check_out_time = datetime.combine(timestamp_dt.date(), time(16, 0))
             check_out_after_twelve = datetime.combine(timestamp_dt.date(), time(12, 0))
 
             # Determine status based on timestamp and existing records
@@ -234,7 +234,7 @@ def store_in_db(attendance):
                 "timestamp": timestamp_dt,
                 "status": status,
                 "punch": new_record["punch"],
-                "lateintime": 'late' if count_today == 0 and timestamp_dt.time() > time(9, 0) else 'on time'
+                "lateintime": 'late' if count_today == 0 and timestamp_dt.time() > time(8, 30) else 'on time'
             })
 
         db.commit()
