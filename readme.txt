@@ -1,0 +1,3 @@
+-- first reinstall venv as it was requiring c++ build libraries
+-- copy important bat file and scheduler files from servers 
+--setup the venv first for installing packages
