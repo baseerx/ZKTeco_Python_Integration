@@ -9,11 +9,12 @@ from sqlalchemy import column, Integer, String,text
 from database import SessionLocal
 from sqlalchemy.orm import Session
 from datetime import datetime,time
-
+import socket
 # --- Load Environment Variables ---
 load_dotenv()
 ip = os.getenv("BIOMETRIC_IP_1")
 ip_2 = os.getenv("BIOMETRIC_IP_2")
+ip_3 = os.getenv("BIOMETRIC_IP_3")
 port = os.getenv("BIOMETRIC_PORT")
 
 # --- Logging Configuration ---
@@ -85,15 +86,20 @@ def clear_old_attendance():
     try:
         zk1 = ZK(ip, port=int(port), timeout=5)
         zk2 = ZK(ip_2, port=int(port), timeout=5)
+        zk3 = ZK(ip_3, port=int(port), timeout=5)
         conn1 = zk1.connect()
         conn2 = zk2.connect()
+        conn3 = zk3.connect()
+
         conn1.disable_device()
         conn2.disable_device()
+        conn3.disable_device()
 
         # Optional: Add logic to verify data is already backed up
         # If verified, then clear all attendance
         conn1.clear_attendance()
         conn2.clear_attendance()
+        conn3.clear_attendance()
 
         logger.info("Cleared all attendance records from device.")
         return {"message": "Attendance records cleared from both devices."}
@@ -107,6 +113,9 @@ def clear_old_attendance():
         if conn2:
             conn2.enable_device()
             conn2.disconnect()
+        if conn3:
+            conn3.enable_device()
+            conn3.disconnect()
         logger.info("Disconnected from devices")
 
 @app.get("/get_attendance")
@@ -116,7 +125,8 @@ def get_employees_attendance():
         # logger.info("Connecting to device to fetch attendance...")
         first_machine=call_biometric_machines(ip, port)
         second_machine=call_biometric_machines(ip_2, port)
-        return {"first_machine_attendance": first_machine["attendance"], "second_machine_attendance": second_machine["attendance"]}
+        third_machine=call_biometric_machines(ip_3, port)
+        return {"first_machine_attendance": first_machine["attendance"], "second_machine_attendance": second_machine["attendance"], "third_machine_attendance": third_machine["attendance"]}
     except Exception as e:
         logger.error("Error while fetching attendance", exc_info=True)
         return {"error": str(e)}
@@ -125,6 +135,33 @@ def get_employees_attendance():
             conn.enable_device()
             conn.disconnect()
             logger.info("Disconnected from device")
+
+def check_device_connection(ip, port):
+    conn = None
+    try:
+        # Step 1: Check network connectivity (IP + PORT)
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.settimeout(3)
+        result = sock.connect_ex((ip, int(port)))
+        sock.close()
+
+        if result != 0:
+            return {"ip": ip, "status": "NOT REACHABLE", "zk_connected": False}
+
+        # Step 2: Try ZK device connection
+        zk = ZK(ip, port=int(port), timeout=5)
+        conn = zk.connect()
+        conn.disable_device()
+
+        return {"ip": ip, "status": "CONNECTED", "zk_connected": True}
+
+    except Exception as e:
+        return {"ip": ip, "status": "ERROR", "zk_connected": False, "error": str(e)}
+
+    finally:
+        if conn:
+            conn.enable_device()
+            conn.disconnect()
 
 @staticmethod
 def call_biometric_machines(ip,port):
@@ -283,3 +320,14 @@ def get_users():
             conn.enable_device()
             conn.disconnect()
             logger.info("Disconnected from device")
+
+
+@app.get("/check_devices")
+def check_all_devices():
+    devices = [
+        check_device_connection(ip, port),
+        check_device_connection(ip_2, port),
+        check_device_connection(ip_3, port),
+    ]
+
+    return {"devices": devices}
